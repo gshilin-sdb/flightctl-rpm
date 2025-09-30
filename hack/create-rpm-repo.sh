@@ -142,9 +142,9 @@ log "Creating repository configuration files..."
 
 cat > "$REPO_OUTPUT_DIR/flightctl-epel.repo" << EOF
 [flightctl]
-name=FlightCtl RPM Repository (EPEL)
+name=Flight Control RPM Repository (EPEL)
 type=rpm-md
-baseurl=https://flightctl.github.io/flightctl-rpm/epel-9-\$basearch/
+baseurl=https://rpm.flightctl.io/epel-9-\$basearch/
 gpgcheck=1
 gpgkey=https://download.copr.fedorainfracloud.org/results/@redhat-et/flightctl/pubkey.gpg
 enabled=1
@@ -154,9 +154,9 @@ EOF
 
 cat > "$REPO_OUTPUT_DIR/flightctl-fedora.repo" << EOF
 [flightctl]
-name=FlightCtl RPM Repository (Fedora)
+name=Flight Control RPM Repository (Fedora)
 type=rpm-md
-baseurl=https://flightctl.github.io/flightctl-rpm/fedora-\$releasever-\$basearch/
+baseurl=https://rpm.flightctl.io/fedora-\$releasever-\$basearch/
 gpgcheck=1
 gpgkey=https://download.copr.fedorainfracloud.org/results/@redhat-et/flightctl/pubkey.gpg
 enabled=1
