@@ -1,20 +1,20 @@
-# FlightCtl RPM Repository
+# Flight Control RPM Repository
 
-This repository contains production-ready RPM packages for FlightCtl.
+This repository contains RPM packages for the Flight Control project.
 
 ## Installation
 
 ### EPEL (RHEL 9, CentOS Stream 9, Rocky Linux 9)
 
 ```bash
-sudo dnf config-manager addrepo --from-repofile=https://flightctl.github.io/flightctl-rpm/flightctl-epel.repo
+sudo dnf config-manager --add-repo https://rpm.flightctl.io/flightctl-epel.repo
 sudo dnf install flightctl-agent flightctl-cli
 ```
 
 ### Fedora
 
 ```bash
-sudo dnf config-manager addrepo --from-repofile=https://flightctl.github.io/flightctl-rpm/flightctl-fedora.repo
+sudo dnf config-manager addrepo --from-repofile=https://rpm.flightctl.io/flightctl-fedora.repo
 sudo dnf install flightctl-agent flightctl-cli
 ```
 
@@ -30,7 +30,7 @@ This repository can be updated manually using GitHub Actions workflow.
 
 ### Manual Update
 
-To update the repository with a new FlightCtl version:
+To update the repository with a new Flight Control version:
 
 1. **Start the workflow:**
    ```bash
