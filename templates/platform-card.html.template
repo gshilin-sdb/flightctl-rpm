@@ -1,5 +1,0 @@
-        <div class="platform-card">
-            <h3>{{DISPLAY_NAME}}</h3>
-            <p>{{PLATFORM_RPMS}} packages available</p>
-            <a href="{{PLATFORM}}/">View Packages</a>
-        </div>

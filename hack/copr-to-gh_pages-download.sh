@@ -125,7 +125,7 @@ main() {
     # Filter to only EPEL and Fedora chroots
     local -a filtered_chroots=()
     while IFS= read -r chroot; do
-        if [[ "$chroot" == epel-* ]] || [[ "$chroot" == fedora-* ]]; then
+        if [[ "$chroot" == epel-* ]] || [[ "$chroot" == fedora-4* ]]; then
             filtered_chroots+=("$chroot")
         fi
     done <<< "$available_chroots"
@@ -157,9 +157,6 @@ main() {
     find "$DEST_DIR" -name "*debuginfo*.rpm" -delete 2>/dev/null || true
     find "$DEST_DIR" -name "*debugsource*.rpm" -delete 2>/dev/null || true
     find "$DEST_DIR" -name "*.src.rpm" -delete 2>/dev/null || true
-
-    # Keep only flightctl-agent and flightctl-cli
-    find "$DEST_DIR" -name "*.rpm" ! -name "flightctl-agent-*.rpm" ! -name "flightctl-cli-*.rpm" -delete 2>/dev/null || true
 
     # Create repository metadata
     log "Creating repository metadata..."
