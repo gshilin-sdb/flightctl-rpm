@@ -28,13 +28,16 @@ jobs:
           set -euo pipefail
           echo "=== Installing dependencies ==="
           sudo apt-get update
-          sudo apt-get install -y createrepo-c curl jq python3-pip
+          sudo apt-get install -y createrepo-c curl jq python3-pip git-restore-mtime
           pip3 install copr-cli
 
           echo "Installed versions:"
           createrepo_c --version
           copr-cli --version
           jq --version
+
+      - name: Restore mtime of files
+        run: git restore-mtime
 
       - name: Determine version to download
         id: version
@@ -80,47 +83,21 @@ jobs:
             exit 1
           fi
 
-      - name: Generate RPM repository structure directly in flightctl-rpm
+      - name: Merge downloaded RPMs into the existing repository structure
         run: |
           set -euo pipefail
-          echo "=== Generating RPM repository structure directly in flightctl-rpm ==="
+          echo "=== Merging downloaded RPMs into the existing repository structure ==="
 
           # Make the script executable
-          chmod +x ./hack/create-rpm-repo.sh
+          chmod +x ./hack/merge-rpms-into-repo.sh
 
-          # Run the repository creation script from flightctl-rpm directory  
-          ./hack/create-rpm-repo.sh .output/copr-rpms-temp .output/repo-temp flightctl flightctl
-          
-          # Merge new RPMs with existing repository structure (preserve existing versions)
-          echo "Merging new RPMs with existing repository..."
-          for platform_dir in .output/repo-temp/*/; do
-            if [ -d "$platform_dir" ]; then
-              platform=$(basename "$platform_dir")
-              
-              # Skip non-platform directories
-              if [[ "$platform" == "repodata" ]] || [[ "$platform" == "templates" ]]; then
-                continue
-              fi
-              
-              # Create platform directory if it doesn't exist
-              mkdir -p "$platform"
-              
-              # Copy new RPMs to existing platform directory
-              find "$platform_dir" -name "*.rpm" -exec cp {} "$platform/" \;
-              echo "  Merged RPMs for $platform"
-            fi
-          done
-          
-          # Copy/update repository configuration files
-          cp .output/repo-temp/*.repo . 2>/dev/null || true
-          
-          # Update CSS files
-          cp .output/repo-temp/*.css . 2>/dev/null || true
+          # Run the scrtipt to merge new RPMs into existing repo structure
+          ./hack/merge-rpms-into-repo.sh .output/copr-rpms-temp
           
           # Clean up temporary files
           rm -rf .output
 
-          echo "Repository structure merged successfully!"
+          echo "RPMs merged successfully!"
 
           # Verify structure
           echo "Current repository structure:"
@@ -134,6 +111,9 @@ jobs:
               echo "  $platform: $rpm_count RPMs"
             fi
           done
+
+      - name: Regenerate RPM repository metadata
+        run: hack/regenerate-rpm-repo.sh
 
       - name: Regenerate HTML with all versions
         run: |
@@ -161,21 +141,6 @@ jobs:
 
           # Create and switch to new branch
           git checkout -b "$BRANCH_NAME"
-
-          # Regenerate repository metadata for all platforms to include all versions
-          echo "Regenerating repository metadata for all platforms..."
-          for platform_dir in */; do
-            if [ -d "$platform_dir" ] && [[ "$platform_dir" != ".git/" ]] && [[ "$platform_dir" != ".github/" ]] && [[ "$platform_dir" != "hack/" ]]; then
-              platform=${platform_dir%/}
-              echo "  Updating metadata for $platform"
-
-              # Regenerate repository metadata
-              createrepo_c "$platform_dir" || {
-                echo "Warning: Failed to create repo metadata for $platform"
-                continue
-              }
-            fi
-          done
 
           # Add all changes
           git add .

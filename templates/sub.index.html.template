@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flight Control RPM Repository</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="header">
+        <h1>Flight Control RPM Repository</h1>
+    </div>
+
+    <table>
+    <tr>
+        <th>Name</th>
+        <th>Last Modified</th>
+        <th>Size</th>
+    </tr>
+{{TABLE_ROWS}}
+    </table>
+
+    <div class="footer">
+        <p><strong>Last updated:</strong> {{TIMESTAMP}}</p>
+    </div>
+</body>
+</html>
