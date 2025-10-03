@@ -37,7 +37,7 @@ substitute_template() {
         local key="${key_value%%=*}"
         # Extract value as everything after the first =
         local value="${key_value#*=}"
-        
+
         # Handle special case where value is a file reference
         local temp_value_file
         local cleanup_temp_file=false
@@ -105,13 +105,7 @@ log "Latest version: $LATEST_VERSION"
 log "All versions: $versions"
 
 # Generate list of directories in the RPM repo
-dirs=$(cd "$INPUT_DIR"; find . \( \
-    -path ./.git -o \
-    -path ./.github -o \
-    -path ./.output -o \
-    -path ./hack -o \
-    -path ./templates \
-    \) -prune -o -type d -print)
+dirs=$(cd "$INPUT_DIR"; echo ".";find {epel,fedora} -type d)
 for dir in $dirs; do
     log "Processing directory: $dir"
 
@@ -163,10 +157,14 @@ for dir in $dirs; do
     if [[ "$dir" == "." ]]; then
         substitute_template "$TEMPLATES_DIR/index.html.template" "$dir/index.html" \
             "TABLE_ROWS=$entries" \
+            "LATEST_VERSION=$LATEST_VERSION" \
+            "LATEST_VERSION_LOCK=${LATEST_VERSION%.*}.*" \
             "TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
     else
         substitute_template "$TEMPLATES_DIR/sub.index.html.template" "$dir/index.html" \
             "TABLE_ROWS=$entries" \
+            "LATEST_VERSION=$LATEST_VERSION" \
+            "LATEST_VERSION_LOCK=${LATEST_VERSION%.*}.*" \
             "TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
     fi
 done
