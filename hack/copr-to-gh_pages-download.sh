@@ -125,7 +125,8 @@ main() {
     # Filter to only EPEL and Fedora chroots
     local -a filtered_chroots=()
     while IFS= read -r chroot; do
-        if [[ "$chroot" == epel-* ]] || [[ "$chroot" == fedora-4* ]]; then
+        # Match EPEL 9+ and Fedora 40+ chroots
+        if [[ "$chroot" =~ ^epel-(9|[1-9][0-9]+)-.*$ ]] || [[ "$chroot" =~ ^fedora-(4[0-9]|[5-9][0-9]|[1-9][0-9]{2,})-.*$ ]]; then
             filtered_chroots+=("$chroot")
         fi
     done <<< "$available_chroots"
