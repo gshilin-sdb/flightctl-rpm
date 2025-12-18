@@ -1,0 +1,9 @@
+[flightctl-lab]
+name=Flight Control RPM Repository (Lab)
+type=rpm-md
+baseurl=https://rpm.flightctl.io/lab/epel/9/$basearch/
+gpgcheck=1
+gpgkey=https://download.copr.fedorainfracloud.org/results/hexfusion/flightctl/pubkey.gpg
+enabled=1
+enabled_metadata=1
+metadata_expire=1d
