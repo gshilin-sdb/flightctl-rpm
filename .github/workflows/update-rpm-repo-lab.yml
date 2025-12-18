@@ -1,0 +1,211 @@
+name: Update FlightCtl Lab RPM Repository
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to download (e.g., 0.8.0, v0.8.0-rc2) - leave empty for latest'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  update-lab-rpm-repository:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout this repository (flightctl-rpm)
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          echo "=== Installing dependencies ==="
+          sudo apt-get update
+          sudo apt-get install -y createrepo-c curl jq python3-pip git-restore-mtime
+          pip3 install copr-cli
+
+          echo "Installed versions:"
+          createrepo_c --version
+          copr-cli --version
+          jq --version
+
+      - name: Restore mtime of files
+        run: git restore-mtime
+
+      - name: Download RPMs from Lab COPR
+        run: |
+          set -euo pipefail
+          echo "=== Downloading RPMs from hexfusion/flightctl COPR ==="
+
+          COPR_PROJECT="hexfusion/flightctl"
+          DEST_DIR=".output/copr-rpms-temp"
+          CHROOT="epel-9-x86_64"
+
+          mkdir -p "$DEST_DIR"
+
+          # Get latest successful build if no version specified
+          if [ -z "${{ github.event.inputs.version }}" ]; then
+            echo "Finding latest successful build..."
+            BUILD_ID=$(copr-cli list-builds "$COPR_PROJECT" --output-format json | \
+              jq -r '[.[] | select(.state == "succeeded")] | .[0].id')
+          else
+            VERSION="${{ github.event.inputs.version }}"
+            VERSION=${VERSION#v}
+            echo "Finding build for version: $VERSION"
+
+            BUILDS=$(copr-cli list-builds "$COPR_PROJECT" --output-format json)
+
+            for bid in $(echo "$BUILDS" | jq -r '.[] | select(.state == "succeeded") | .id' | head -20); do
+              BUILD_DETAILS=$(curl -s "https://copr.fedorainfracloud.org/api_3/build/$bid")
+              BUILD_VERSION=$(echo "$BUILD_DETAILS" | jq -r '.source_package.version // empty')
+
+              if [ -n "$BUILD_VERSION" ]; then
+                CLEAN_VERSION=$(echo "$BUILD_VERSION" | sed 's/-[^-]*$//')
+                echo "  Checking build $bid: version $CLEAN_VERSION"
+
+                if [ "$VERSION" = "$CLEAN_VERSION" ]; then
+                  BUILD_ID=$bid
+                  break
+                fi
+
+                # Handle pre-release versions
+                VERSION_TILDE=$(echo "$VERSION" | sed 's/-rc/~rc/g; s/-alpha/~alpha/g; s/-beta/~beta/g')
+                if [ "$VERSION_TILDE" = "$CLEAN_VERSION" ]; then
+                  BUILD_ID=$bid
+                  break
+                fi
+              fi
+            done
+          fi
+
+          if [ -z "$BUILD_ID" ] || [ "$BUILD_ID" = "null" ]; then
+            echo "[ERROR] No successful build found"
+            exit 1
+          fi
+
+          echo "Using build ID: $BUILD_ID"
+
+          # Download the specific chroot
+          echo "Downloading $CHROOT..."
+          copr-cli download-build "$BUILD_ID" --dest "$DEST_DIR" --chroot "$CHROOT"
+
+          # Clean up unwanted RPMs
+          echo "Cleaning up packages..."
+          find "$DEST_DIR" -name "*debuginfo*.rpm" -delete 2>/dev/null || true
+          find "$DEST_DIR" -name "*debugsource*.rpm" -delete 2>/dev/null || true
+          find "$DEST_DIR" -name "*.src.rpm" -delete 2>/dev/null || true
+
+          # Show what we downloaded
+          echo "Downloaded RPMs:"
+          find "$DEST_DIR" -name "*.rpm" -exec basename {} \;
+
+          TOTAL_RPMS=$(find "$DEST_DIR" -name "*.rpm" | wc -l)
+          echo "Total RPMs downloaded: $TOTAL_RPMS"
+
+          if [ "$TOTAL_RPMS" -eq 0 ]; then
+            echo "[ERROR] No RPMs were downloaded!"
+            exit 1
+          fi
+
+      - name: Merge RPMs into lab directory
+        run: |
+          set -euo pipefail
+          echo "=== Merging RPMs into lab directory ==="
+
+          LAB_DIR="lab/epel/9/x86_64"
+          SRC_DIR=".output/copr-rpms-temp/epel-9-x86_64"
+
+          # Create directory if it doesn't exist
+          mkdir -p "$LAB_DIR"
+
+          # Copy new RPMs
+          if [ -d "$SRC_DIR" ]; then
+            cp -v "$SRC_DIR"/*.rpm "$LAB_DIR/" 2>/dev/null || true
+          fi
+
+          # Clean up temp files
+          rm -rf .output
+
+          echo "Lab RPMs:"
+          ls -la "$LAB_DIR"/*.rpm 2>/dev/null || echo "No RPMs found"
+
+      - name: Regenerate RPM repository metadata
+        run: |
+          set -euo pipefail
+          echo "=== Regenerating repository metadata ==="
+
+          LAB_DIR="lab/epel/9/x86_64"
+
+          if [ -d "$LAB_DIR" ]; then
+            createrepo_c --update "$LAB_DIR"
+            echo "Repository metadata updated for $LAB_DIR"
+          fi
+
+      - name: Create branch and commit changes
+        run: |
+          set -euo pipefail
+          echo "=== Creating update branch ==="
+
+          BRANCH_NAME="update-lab-rpm-$(date +%Y%m%d-%H%M%S)"
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Create and switch to new branch
+          git checkout -b "$BRANCH_NAME"
+
+          # Add all changes
+          git add .
+
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "[INFO] No changes detected"
+            echo "skip_pr=true" >> $GITHUB_ENV
+          else
+            echo "[INFO] Changes detected, preparing commit..."
+            echo "branch_name=$BRANCH_NAME" >> $GITHUB_ENV
+            echo "skip_pr=false" >> $GITHUB_ENV
+
+            # Commit changes
+            git commit -m "Update Lab RPM repository" \
+              -m "- Add/update RPM packages from hexfusion/flightctl COPR" \
+              -m "- Update repository metadata" \
+              -m "" \
+              -m "Co-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+
+            # Push branch
+            git push origin "$BRANCH_NAME"
+            echo "[SUCCESS] Pushed branch $BRANCH_NAME"
+          fi
+
+      - name: Create deployment summary
+        run: |
+          set -euo pipefail
+          echo "## FlightCtl Lab RPM Repository Update" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Source: hexfusion/flightctl COPR" >> $GITHUB_STEP_SUMMARY
+          echo "- Target: lab/epel/9/x86_64" >> $GITHUB_STEP_SUMMARY
+          echo "- Trigger: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ env.skip_pr }}" = "false" ]; then
+            echo "- Branch Created: \`${{ env.branch_name }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Create PR:" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            echo "gh pr create --repo flightctl/flightctl-rpm --title 'Update Lab RPM repository' --head '${{ env.branch_name }}' --base main" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Status: No changes detected" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Installation:" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "sudo dnf config-manager addrepo --from-repofile=https://rpm.flightctl.io/flightctl-lab.repo" >> $GITHUB_STEP_SUMMARY
+          echo "sudo dnf install flightctl-agent flightctl-cli" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
